@@ -1,0 +1,111 @@
+
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>nihongowokesu</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; line-height: 1.8; max-width: 800px; margin: 40px auto; padding: 20px; background-color: #f9f9f9; color: #333; }
+        h1 { color: #1a1a1a; border-bottom: 2px solid #eee; padding-bottom: 10px; }
+        audio { width: 100%; margin-bottom: 20px; }
+        #transcript p { 
+            padding: 10px 15px; 
+            margin: 5px 0; 
+            border-radius: 8px; 
+            cursor: pointer; 
+            transition: background-color 0.2s, transform 0.1s;
+            border: 1px solid #ddd;
+            background-color: #fff;
+        }
+        #transcript p:hover { 
+            background-color: #e9f5ff; 
+            border-color: #a0c4ff;
+        }
+        #transcript p.active { 
+            background-color: #fff3cd;
+            border-color: #ffeeba;
+            transform: scale(1.01);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+    </style>
+</head>
+<body>
+    <h1>nihongowokesu</h1>
+    <audio id="audio-player" controls src="nihongowokesu.wav"></audio>
+    <div id="transcript"></div>
+    <script>
+        const vttFilePath = 'nihongowokesu.vtt';
+        const audioPlayer = document.getElementById('audio-player');
+        const transcriptContainer = document.getElementById('transcript');
+        let cues = [];
+
+        async function loadAndParseVTT() {
+            try {
+                const response = await fetch(vttFilePath);
+                if (!response.ok) throw new Error('VTTファイルの読み込みに失敗しました。ファイルパスを確認してください。');
+                const vttText = await response.text();
+                const lines = vttText.split(/\r?\n/);
+                let currentCue = null;
+                for (const line of lines) {
+                    if (line.includes('-->')) {
+                        if (currentCue && currentCue.text) cues.push(currentCue);
+                        const [start, end] = line.split(' --> ');
+                        currentCue = { start: timeStringToSeconds(start.trim()), end: timeStringToSeconds(end.trim()), text: '' };
+                    } else if (currentCue && line.trim() !== '' && !line.trim().match(/^\d+$/) && line.trim() !== 'WEBVTT') {
+                        currentCue.text += (currentCue.text ? ' ' : '') + line.trim();
+                    }
+                }
+                if (currentCue && currentCue.text) cues.push(currentCue);
+                displayTranscript();
+            } catch (error) {
+                transcriptContainer.innerHTML = `<p style="color: red; font-weight: bold;">${error.message}</p>`;
+            }
+        }
+
+        function displayTranscript() {
+            transcriptContainer.innerHTML = '';
+            cues.forEach((cue) => {
+                const p = document.createElement('p');
+                p.textContent = cue.text;
+                p.dataset.startTime = cue.start;
+                p.onclick = () => {
+                    audioPlayer.currentTime = parseFloat(p.dataset.startTime);
+                    if (audioPlayer.paused) {
+                        audioPlayer.play();
+                    }
+                };
+                transcriptContainer.appendChild(p);
+            });
+        }
+        
+        audioPlayer.addEventListener('timeupdate', () => {
+            const currentTime = audioPlayer.currentTime;
+            const allPs = transcriptContainer.querySelectorAll('p');
+            let activeCueIndex = -1;
+            for(let i = 0; i < cues.length; i++) {
+                if (currentTime >= cues[i].start && currentTime < cues[i].end) {
+                    activeCueIndex = i;
+                    break;
+                }
+            }
+            allPs.forEach((p, index) => {
+                p.classList.toggle('active', index === activeCueIndex);
+            });
+        });
+
+        function timeStringToSeconds(timeString) {
+            const parts = timeString.split(':');
+            let seconds = 0;
+            if (parts.length === 3) {
+                seconds = parseInt(parts[0], 10) * 3600 + parseInt(parts[1], 10) * 60 + parseFloat(parts[2]);
+            } else {
+                seconds = parseInt(parts[0], 10) * 60 + parseFloat(parts[1]);
+            }
+            return seconds;
+        }
+
+        window.addEventListener('load', loadAndParseVTT);
+    </script>
+</body>
+</html>
